@@ -1,21 +1,21 @@
 package bomboclot.input;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 
-/**
- * IReader implementation backed by the two XLSX files in src/main/resources/. The
- * loader reads them eagerly during load() and answers all subsequent queries from
- * in-memory maps. Header detection is by column name (not position) so the source
- * spreadsheets can reorder columns without breaking the parser.
- */
 public class XLSXReader implements IReader
 {
     private static final String PRODUCT_FILE_LOCATION = "/products.xlsx";
@@ -23,11 +23,10 @@ public class XLSXReader implements IReader
 
     private final HashMap<String, Product>  products  = new HashMap<>();
     private final HashMap<String, Costumer> costumers = new HashMap<>();
+    private HashMap<String, List<Delivery>> deliveries_by_route;
+    private HashMap<String, TimeWindow>     windows;
+    private HashSet<String>                 closed_days;
 
-    /**
-     * Normalises a dimension reading to metres based on the unit suffix written
-     * next to it in the spreadsheet (cm, mm, or already-metres).
-     */
     private static double convert(double size, String multiplier)
     {
         switch (multiplier)
@@ -38,10 +37,6 @@ public class XLSXReader implements IReader
         }
     }
 
-    /**
-     * Reads the products.xlsx workbook (renamed ZM040.XLSX) into the products map,
-     * one Product per material with one Dimensions entry per unit-of-measure.
-     */
     private void load_products()
     {
         try (InputStream product_file_stream = getClass().getResourceAsStream(PRODUCT_FILE_LOCATION))
@@ -106,11 +101,6 @@ public class XLSXReader implements IReader
         }
     }
 
-    /**
-     * Reads the Direcciones sheet of general.xlsx into the customers map. Marked
-     * private (was public) for symmetry with load_products — only load() should
-     * trigger the loaders externally.
-     */
     private void load_costumers()
     {
         try (InputStream general_file_stream = getClass().getResourceAsStream(GENERAL_FILE_LOCATION))
@@ -186,11 +176,104 @@ public class XLSXReader implements IReader
     @Override
     public List<Delivery> get_deliveries(String date_dd_mm_yyyy, String route_code)
     {
-        // TODO data team: read 'Detalle entrega' from general.xlsx, filter by FECHA
-        // and Ruta, group rows by Entrega, and return one Delivery per group with all
-        // product lines collapsed into the lines list. The customer_identifier comes
-        // from the 'Destinatario mcía.' numeric column (read as String).
-        return List.of();
+        if (deliveries_by_route == null)
+        {
+            deliveries_by_route = new HashMap<>();
+            try (InputStream general_file_stream = getClass().getResourceAsStream(GENERAL_FILE_LOCATION))
+            {
+                assert general_file_stream != null;
+
+                Workbook workbook = new XSSFWorkbook(general_file_stream);
+
+                Sheet sheet = workbook.getSheet("Detalle entrega");
+
+                int date_column = -1, route_column = -1, entrega_column = -1, customer_column = -1, material_column = -1, quantity_column = -1, unit_column = -1;
+                int i = 0;
+                for (Cell cell : sheet.getRow(0))
+                {
+                    String name = cell.getStringCellValue().toLowerCase().strip();
+
+                    switch (name)
+                    {
+                        case "fecha"              -> date_column     = i;
+                        case "ruta"               -> route_column    = i;
+                        case "entrega"            -> entrega_column  = i;
+                        case "destinatario mcía." -> customer_column = i;
+                        case "material"           -> material_column = i;
+                        case "cantidad entrega"   -> quantity_column = i;
+                        case "un.medida venta"    -> unit_column     = i;
+                    }
+
+                    i++;
+                }
+
+                HashMap<String, HashMap<String, ArrayList<DeliveryLine>>> staged_lines     = new HashMap<>();
+                HashMap<String, HashMap<String, String>>                  staged_customers = new HashMap<>();
+
+                for (i = 1; i < sheet.getPhysicalNumberOfRows(); i++)
+                {
+                    Row row = sheet.getRow(i);
+                    if (row == null) continue;
+
+                    Cell date_cell = row.getCell(date_column);
+                    String date = "";
+                    if (date_cell != null)
+                    {
+                        if (date_cell.getCellType() == CellType.STRING) date = date_cell.getStringCellValue().strip();
+                        else if (date_cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(date_cell))
+                            date = new SimpleDateFormat("dd/MM/yyyy").format(date_cell.getDateCellValue());
+                    }
+
+                    Cell route_cell = row.getCell(route_column);
+                    String route = (route_cell == null) ? "" : route_cell.getStringCellValue().strip();
+
+                    Cell entrega_cell = row.getCell(entrega_column);
+                    String entrega = "";
+                    if (entrega_cell != null)
+                    {
+                        if (entrega_cell.getCellType() == CellType.STRING) entrega = entrega_cell.getStringCellValue().strip();
+                        else if (entrega_cell.getCellType() == CellType.NUMERIC) entrega = String.valueOf((long) entrega_cell.getNumericCellValue());
+                    }
+
+                    Cell customer_cell = row.getCell(customer_column);
+                    String customer = "";
+                    if (customer_cell != null)
+                    {
+                        if (customer_cell.getCellType() == CellType.STRING) customer = customer_cell.getStringCellValue().strip();
+                        else if (customer_cell.getCellType() == CellType.NUMERIC) customer = String.valueOf((long) customer_cell.getNumericCellValue());
+                    }
+
+                    String material = row.getCell(material_column).getStringCellValue();
+                    String unit     = row.getCell(unit_column).getStringCellValue();
+                    double quantity = row.getCell(quantity_column).getNumericCellValue();
+
+                    String route_key = date + "|" + route;
+                    staged_lines.computeIfAbsent(route_key, k -> new HashMap<>())
+                                .computeIfAbsent(entrega,   k -> new ArrayList<>())
+                                .add(new DeliveryLine(material, unit, quantity));
+                    staged_customers.computeIfAbsent(route_key, k -> new HashMap<>())
+                                    .put(entrega, customer);
+                }
+
+                for (var route_entry : staged_lines.entrySet())
+                {
+                    String route_key = route_entry.getKey();
+                    ArrayList<Delivery> list = new ArrayList<>();
+                    for (var entrega_entry : route_entry.getValue().entrySet())
+                    {
+                        String entrega_id  = entrega_entry.getKey();
+                        String customer_id = staged_customers.get(route_key).get(entrega_id);
+                        list.add(new Delivery(entrega_id, customer_id, entrega_entry.getValue()));
+                    }
+                    deliveries_by_route.put(route_key, list);
+                }
+            }
+            catch (IOException e)
+            {
+                System.err.println(e.getMessage());
+            }
+        }
+        return deliveries_by_route.getOrDefault(date_dd_mm_yyyy + "|" + route_code, List.of());
     }
 
     /**
@@ -201,11 +284,97 @@ public class XLSXReader implements IReader
     @Override
     public TimeWindow get_window(String customer_identifier, int weekday)
     {
-        // TODO data team: add 'Horarios Entrega.XLSX' to src/main/resources/ as
-        // 'horarios.xlsx' and load it. Look up (Deudor=customer_identifier,
-        // Día semana=weekday). If the row's Cierre is 'X' or window is 00:00-00:00,
-        // return null. If 00:00-23:59 or no row, return TimeWindow.anyTime().
-        // Otherwise return new TimeWindow(open_minutes, close_minutes).
-        return TimeWindow.anyTime();
+        if (windows == null)
+        {
+            windows = new HashMap<>();
+            closed_days = new HashSet<>();
+            try (InputStream schedule_file_stream = getClass().getResourceAsStream("/horarios.xlsx"))
+            {
+                if (schedule_file_stream != null)
+                {
+                    Workbook workbook = new XSSFWorkbook(schedule_file_stream);
+
+                    Sheet sheet = workbook.getSheetAt(0);
+
+                    int customer_column = -1, weekday_column = -1, open_column = -1, close_column = -1, closed_column = -1;
+                    int i = 0;
+                    for (Cell cell : sheet.getRow(0))
+                    {
+                        String name = cell.getStringCellValue().toLowerCase().strip();
+
+                        switch (name)
+                        {
+                            case "deudor"            -> customer_column = i;
+                            case "día semana"        -> weekday_column  = i;
+                            case "horario inicia a"  -> open_column     = i;
+                            case "horario termina a" -> close_column    = i;
+                            case "cierre si/no"      -> closed_column   = i;
+                        }
+
+                        i++;
+                    }
+
+                    for (i = 1; i < sheet.getPhysicalNumberOfRows(); i++)
+                    {
+                        Row row = sheet.getRow(i);
+                        if (row == null) continue;
+
+                        Cell customer_cell = row.getCell(customer_column);
+                        String customer = "";
+                        if (customer_cell != null)
+                        {
+                            if (customer_cell.getCellType() == CellType.STRING) customer = customer_cell.getStringCellValue().strip();
+                            else if (customer_cell.getCellType() == CellType.NUMERIC) customer = String.valueOf((long) customer_cell.getNumericCellValue());
+                        }
+
+                        Cell weekday_cell = row.getCell(weekday_column);
+                        if (weekday_cell == null) continue;
+                        int wd;
+                        try
+                        {
+                            if (weekday_cell.getCellType() == CellType.NUMERIC) wd = (int) weekday_cell.getNumericCellValue();
+                            else wd = Integer.parseInt(weekday_cell.getStringCellValue().strip());
+                        }
+                        catch (NumberFormatException e) { continue; }
+
+                        Cell open_cell = row.getCell(open_column);
+                        int open_min = 0;
+                        if (open_cell != null && open_cell.getCellType() == CellType.NUMERIC)
+                        {
+                            double frac = open_cell.getNumericCellValue();
+                            frac = frac - Math.floor(frac);
+                            open_min = (int) Math.round(frac * 1440);
+                        }
+
+                        Cell close_cell = row.getCell(close_column);
+                        int close_min = 0;
+                        if (close_cell != null && close_cell.getCellType() == CellType.NUMERIC)
+                        {
+                            double frac = close_cell.getNumericCellValue();
+                            frac = frac - Math.floor(frac);
+                            close_min = (int) Math.round(frac * 1440);
+                        }
+
+                        String closed_flag = "";
+                        Cell closed_cell = row.getCell(closed_column);
+                        if (closed_cell != null && closed_cell.getCellType() == CellType.STRING)
+                            closed_flag = closed_cell.getStringCellValue().strip();
+
+                        String key = customer + "|" + wd;
+                        if ("X".equalsIgnoreCase(closed_flag) || (open_min == 0 && close_min == 0))
+                            closed_days.add(key);
+                        else
+                            windows.put(key, new TimeWindow(open_min, close_min));
+                    }
+                }
+            }
+            catch (IOException e)
+            {
+                System.err.println(e.getMessage());
+            }
+        }
+        String key = customer_identifier + "|" + weekday;
+        if (closed_days.contains(key)) return null;
+        return windows.getOrDefault(key, TimeWindow.anyTime());
     }
 }
