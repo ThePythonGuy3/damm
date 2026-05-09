@@ -12,8 +12,11 @@ import java.util.Locale;
 
 public class XLSXReader implements IReader
 {
-    private static final String PRODUCT_FILE_LOCATION = "/products.xlsx";
-    private final HashMap<String, Product> products = new HashMap<>();
+    private static final String PRODUCT_FILE_LOCATION  = "/products.xlsx";
+    private static final String GENERAL_FILE_LOCATION  = "/general.xlsx";
+
+    private final HashMap<String, Product>  products  = new HashMap<>();
+    private final HashMap<String, Costumer> costumers = new HashMap<>();
 
     private static double convert(double size, String multiplier)
     {
@@ -25,7 +28,7 @@ public class XLSXReader implements IReader
         }
     }
 
-    public void load()
+    private void load_products()
     {
         try (InputStream product_file_stream = getClass().getResourceAsStream(PRODUCT_FILE_LOCATION))
         {
@@ -55,8 +58,6 @@ public class XLSXReader implements IReader
                 i++;
             }
 
-            System.out.println(sheet.getPhysicalNumberOfRows());
-
             for (i = 1; i < sheet.getPhysicalNumberOfRows(); i++)
             {
                 Row row = sheet.getRow(i);
@@ -84,8 +85,6 @@ public class XLSXReader implements IReader
                     )
                 );
             }
-
-            System.out.println(products);
         }
         catch (IOException e)
         {
@@ -93,9 +92,70 @@ public class XLSXReader implements IReader
         }
     }
 
+    public void load_costumers()
+    {
+        try (InputStream general_file_stream = getClass().getResourceAsStream(GENERAL_FILE_LOCATION))
+        {
+            assert general_file_stream != null;
+
+            Workbook workbook = new XSSFWorkbook(general_file_stream);
+
+            Sheet sheet = workbook.getSheet("Direcciones");
+
+            int identifier_column = -1, name_column = -1, name2_column = -1, street_column = -1, postal_column = -1, city_column = -1;
+            int i = 0;
+            for (Cell cell : sheet.getRow(0))
+            {
+                String name = cell.getStringCellValue().toLowerCase().strip();
+
+                switch (name)
+                {
+                    case "cliente"   -> identifier_column = i;
+                    case "nombre 1"  -> name_column       = i;
+                    case "nombre 2"  -> name2_column      = i;
+                    case "calle"     -> street_column     = i;
+                    case "cp"        -> postal_column     = i;
+                    case "población" -> city_column       = i;
+                }
+
+                i++;
+            }
+
+            for (i = 1; i < sheet.getPhysicalNumberOfRows(); i++)
+            {
+                Row row = sheet.getRow(i);
+
+                String identifier = row.getCell(identifier_column).getStringCellValue().strip();
+                String name   = row.getCell(name_column).getStringCellValue().strip();
+                String name2  = row.getCell(name2_column).getStringCellValue().strip();
+                String street = row.getCell(street_column).getStringCellValue().toLowerCase().strip();
+                String postal = row.getCell(postal_column).getStringCellValue().toLowerCase().strip();
+                String city   = row.getCell(city_column).getStringCellValue().toLowerCase().strip();
+
+                costumers.put(identifier, new Costumer(identifier, name, name2, new Address(street, postal, city)));
+            }
+        }
+        catch (IOException e)
+        {
+            System.err.println(e.getMessage());
+        }
+    }
+
+    public void load()
+    {
+        load_costumers();
+        load_products();
+    }
+
     @Override
     public Product get_product(String name)
     {
-        return null;
+        return products.get(name);
+    }
+
+    @Override
+    public Costumer get_costumer(int identifier)
+    {
+        return costumers.get(identifier);
     }
 }
