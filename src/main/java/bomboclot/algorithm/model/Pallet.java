@@ -1,5 +1,6 @@
 package bomboclot.algorithm.model;
 
+import bomboclot.algorithm.model.Layer;
 import bomboclot.input.Dimensions;
 
 import java.util.ArrayList;
@@ -9,107 +10,104 @@ public class Pallet
 {
     private final Dimensions dimensions;
 
-    private final List<Column> columns;
+    private final List<Column> columns =
+            new ArrayList<>();
 
     public Pallet(Dimensions dimensions)
     {
         this.dimensions = dimensions;
-
-        this.columns = new ArrayList<>();
     }
 
     public boolean place(Prism prism)
     {
-        /*
-         * RULE 1:
-         * Stack on same-material column
-         */
+        // 1. try existing columns
         for (Column column : columns)
         {
-            if (column.can_stack(prism, dimensions.height()))
+            if (column.place(prism))
             {
-                column.stack(prism);
                 return true;
             }
         }
 
-        /*
-         * RULE 2:
-         * Create new column near corner
-         */
-        Position position = find_corner_position(prism);
+        // 2. create new column
+        Column new_column =
+                new Column(
+                        prism.get_product_id(),
+                        find_new_position(prism),
+                        new Dimensions(
+                                prism.get_dimensions().length(),
+                                prism.get_dimensions().width(),
+                                dimensions.height()
+                        )
+                );
 
-        if (position == null)
+        boolean placed =
+                new_column.place(prism);
+
+        if (!placed)
         {
             return false;
         }
 
-        Column column = new Column(
-                        prism.get_product_id(),
-                        position,
-                        prism.get_dimensions()
-                );
-
-        column.stack(prism);
-
-        columns.add(column);
+        columns.add(new_column);
 
         return true;
     }
 
-    private Position find_corner_position(Prism prism)
+    private Position find_new_position(Prism prism)
     {
-        Dimensions prism_dimensions = prism.get_dimensions();
+        Dimensions d = prism.get_dimensions();
 
         double step = 1.0;
 
-        for (double y = 0; y <= dimensions.width() - prism_dimensions.width(); y += step)
+        for (double y = 0;
+             y <= dimensions.width() - d.width();
+             y += step)
         {
-            for (double x = 0; x <= dimensions.length() - prism_dimensions.length(); x += step)
+            for (double x = 0;
+                 x <= dimensions.length() - d.length();
+                 x += step)
             {
-                Position candidate = new Position(x, y, 0);
+                Position candidate =
+                        new Position(x, y, 0);
 
-                if (can_place_at(candidate, prism_dimensions)) { return candidate; }
+                if (can_place_column(candidate, d))
+                {
+                    return candidate;
+                }
             }
         }
 
-        return null;
+        return new Position(0, 0, 0);
     }
 
-    private boolean can_place_at(Position position, Dimensions prism_dimensions)
+    private boolean can_place_column(Position pos,
+                                     Dimensions d)
     {
-        double x1 = position.x();
-        double y1 = position.y();
+        double x1 = pos.x();
+        double y1 = pos.y();
 
-        double x2 = x1 + prism_dimensions.length();
+        double x2 = x1 + d.length();
+        double y2 = y1 + d.width();
 
-        double y2 = y1 + prism_dimensions.width();
-
-        /*
-         * Check pallet bounds
-         */
-        if (x2 > dimensions.length() || y2 > dimensions.width()) { return false; }
-
-        /*
-         * Collision check
-         */
-        for (Column column : columns)
+        for (Column c : columns)
         {
-            double cx1 = column.get_base_position().x();
+            double cx1 = c.get_base_position().x();
+            double cy1 = c.get_base_position().y();
 
-            double cy1 = column.get_base_position().y();
+            double cx2 = cx1 + c.get_base_dimensions().length();
+            double cy2 = cy1 + c.get_base_dimensions().width();
 
-            double cx2 = cx1 + column.get_base_dimensions().length();
-
-            double cy2 = cy1 + column.get_base_dimensions().width();
-
-            boolean overlap = x1 < cx2
+            boolean overlap =
+                    x1 < cx2
                             && x2 > cx1
                             && y1 < cy2
                             && y2 > cy1;
 
             if (overlap)
-            { return false; }
+            {
+                return false;
+            }
         }
 
         return true;
