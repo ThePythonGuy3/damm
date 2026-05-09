@@ -40,5 +40,10 @@
             <artifactId>fastexcel</artifactId>
             <version>0.19.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>26.0.1</version>
+        </dependency>
     </dependencies>
 </project>
