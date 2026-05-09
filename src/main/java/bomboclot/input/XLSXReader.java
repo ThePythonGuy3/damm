@@ -8,16 +8,26 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
 import java.util.HashMap;
-import java.util.Locale;
+import java.util.List;
 
+/**
+ * IReader implementation backed by the two XLSX files in src/main/resources/. The
+ * loader reads them eagerly during load() and answers all subsequent queries from
+ * in-memory maps. Header detection is by column name (not position) so the source
+ * spreadsheets can reorder columns without breaking the parser.
+ */
 public class XLSXReader implements IReader
 {
-    private static final String PRODUCT_FILE_LOCATION  = "/products.xlsx";
-    private static final String GENERAL_FILE_LOCATION  = "/general.xlsx";
+    private static final String PRODUCT_FILE_LOCATION = "/products.xlsx";
+    private static final String GENERAL_FILE_LOCATION = "/general.xlsx";
 
     private final HashMap<String, Product>  products  = new HashMap<>();
     private final HashMap<String, Costumer> costumers = new HashMap<>();
 
+    /**
+     * Normalises a dimension reading to metres based on the unit suffix written
+     * next to it in the spreadsheet (cm, mm, or already-metres).
+     */
     private static double convert(double size, String multiplier)
     {
         switch (multiplier)
@@ -28,6 +38,10 @@ public class XLSXReader implements IReader
         }
     }
 
+    /**
+     * Reads the products.xlsx workbook (renamed ZM040.XLSX) into the products map,
+     * one Product per material with one Dimensions entry per unit-of-measure.
+     */
     private void load_products()
     {
         try (InputStream product_file_stream = getClass().getResourceAsStream(PRODUCT_FILE_LOCATION))
@@ -92,7 +106,12 @@ public class XLSXReader implements IReader
         }
     }
 
-    public void load_costumers()
+    /**
+     * Reads the Direcciones sheet of general.xlsx into the customers map. Marked
+     * private (was public) for symmetry with load_products — only load() should
+     * trigger the loaders externally.
+     */
+    private void load_costumers()
     {
         try (InputStream general_file_stream = getClass().getResourceAsStream(GENERAL_FILE_LOCATION))
         {
@@ -154,8 +173,39 @@ public class XLSXReader implements IReader
     }
 
     @Override
-    public Costumer get_costumer(int identifier)
+    public Costumer get_costumer(String identifier)
     {
         return costumers.get(identifier);
+    }
+
+    /**
+     * Returns the deliveries for a given (date, route_code) pair, grouping rows of
+     * the Detalle entrega sheet by Entrega so that callers iterate over client
+     * stops rather than product lines.
+     */
+    @Override
+    public List<Delivery> get_deliveries(String date_dd_mm_yyyy, String route_code)
+    {
+        // TODO data team: read 'Detalle entrega' from general.xlsx, filter by FECHA
+        // and Ruta, group rows by Entrega, and return one Delivery per group with all
+        // product lines collapsed into the lines list. The customer_identifier comes
+        // from the 'Destinatario mcía.' numeric column (read as String).
+        return List.of();
+    }
+
+    /**
+     * Returns the time window for a customer on a given weekday. Returns null when
+     * the schedule says closed that day; returns TimeWindow.anyTime() when no
+     * schedule row exists at all.
+     */
+    @Override
+    public TimeWindow get_window(String customer_identifier, int weekday)
+    {
+        // TODO data team: add 'Horarios Entrega.XLSX' to src/main/resources/ as
+        // 'horarios.xlsx' and load it. Look up (Deudor=customer_identifier,
+        // Día semana=weekday). If the row's Cierre is 'X' or window is 00:00-00:00,
+        // return null. If 00:00-23:59 or no row, return TimeWindow.anyTime().
+        // Otherwise return new TimeWindow(open_minutes, close_minutes).
+        return TimeWindow.anyTime();
     }
 }
