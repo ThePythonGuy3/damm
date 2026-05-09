@@ -1,5 +1,6 @@
 package bomboclot.algorithm.model;
 
+import bomboclot.algorithm.model.Layer;
 import bomboclot.input.Dimensions;
 
 import java.util.ArrayList;
@@ -7,17 +8,13 @@ import java.util.List;
 
 public class Column
 {
-    private static final double EPSILON = 0.0001;
-
     private final String product_id;
 
     private final Position base_position;
 
     private final Dimensions base_dimensions;
 
-    private double current_height;
-
-    private final List<Prism> stacked_prisms;
+    private final List<Layer> layers = new ArrayList<>();
 
     public Column(String product_id,
                   Position base_position,
@@ -26,48 +23,125 @@ public class Column
         this.product_id = product_id;
         this.base_position = base_position;
         this.base_dimensions = base_dimensions;
-
-        this.current_height = 0;
-
-        this.stacked_prisms = new ArrayList<>();
     }
 
-    public boolean can_stack(Prism prism, double max_height)
+    /*
+     * Try placing prism into existing layers,
+     * otherwise create a new layer
+     */
+    public boolean place(Prism prism)
     {
-        Dimensions dimensions = prism.get_dimensions();
+        // 1. try existing layers
+        for (Layer layer : layers)
+        {
+            boolean placed = try_place_in_layer(layer, prism);
 
-        return prism.get_product_id()
-                .equals(product_id)
+            if (placed)
+            {
+                return true;
+            }
+        }
 
-                && same_base(dimensions, base_dimensions)
+        // 2. create new layer
+        Layer new_layer =
+                new Layer(base_dimensions);
 
-                && current_height
-                + dimensions.height()
-                <= max_height;
+        boolean placed =
+                try_place_in_layer(new_layer, prism);
+
+        if (!placed)
+        {
+            return false;
+        }
+
+        layers.add(new_layer);
+
+        return true;
     }
 
-    public void stack(Prism prism)
+    /*
+     * Finds a valid (x,y) inside a layer
+     * using ONLY Layer.can_fit(...)
+     */
+    private boolean try_place_in_layer(Layer layer,
+                                       Prism prism)
     {
-        stacked_prisms.add(prism);
+        Dimensions d = prism.get_dimensions();
 
-        current_height +=
-                prism.get_dimensions().height();
+        double step = 1.0;
+
+        for (double y = 0;
+             y <= base_dimensions.width() - d.width();
+             y += step)
+        {
+            for (double x = 0;
+                 x <= base_dimensions.length() - d.length();
+                 x += step)
+            {
+                if (layer.can_fit(prism, x, y))
+                {
+                    layer.add(prism, x, y);
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
-    private boolean same_base(Dimensions a, Dimensions b)
+    /*
+     * Total height = sum of layer heights
+     */
+    public double get_current_height()
     {
-        return nearly_equal(a.length(), b.length()) && nearly_equal(a.width(), b.width());
+        double total = 0;
+
+        for (Layer layer : layers)
+        {
+            total += layer_height(layer);
+        }
+
+        return total;
     }
 
-    private boolean nearly_equal(double a, double b) { return Math.abs(a - b) < EPSILON; }
+    /*
+     * Layer height = max height of items in layer
+     * (we don't modify Layer, so we compute externally)
+     */
+    private double layer_height(Layer layer)
+    {
+        double max = 0;
 
-    public String get_product_id() { return product_id; }
+        for (Layer.PlacedPrism p : layer.get_items())
+        {
+            max = Math.max(
+                    max,
+                    p.prism()
+                            .get_dimensions()
+                            .height()
+            );
+        }
 
-    public Position get_base_position() { return base_position; }
+        return max;
+    }
 
-    public Dimensions get_base_dimensions() { return base_dimensions; }
+    public String get_product_id()
+    {
+        return product_id;
+    }
 
-    public double get_current_height() { return current_height; }
+    public Position get_base_position()
+    {
+        return base_position;
+    }
 
-    public List<Prism> get_stacked_prisms() { return stacked_prisms; }
+    public Dimensions get_base_dimensions()
+    {
+        return base_dimensions;
+    }
+
+    public List<Layer> get_layers()
+    {
+        return layers;
+    }
 }
