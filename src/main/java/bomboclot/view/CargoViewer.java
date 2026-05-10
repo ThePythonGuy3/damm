@@ -1,7 +1,7 @@
 package bomboclot.view;
 
 import bomboclot.algorithm.model.Position;
-import bomboclot.algorithm.model.Prism;
+import bomboclot.algorithm.model.Item;
 import bomboclot.input.Dimensions;
 import javafx.application.Application;
 import javafx.scene.*;
@@ -65,7 +65,7 @@ public class CargoViewer extends Application
         Rotate cameraRotateX = new Rotate(angleX, Rotate.X_AXIS);
         Rotate cameraRotateY = new Rotate(angleY, Rotate.Y_AXIS);
 
-        Translate cameraDistance = new Translate(0, 0, -1000);
+        Translate cameraDistance = new Translate(0, 0, -100);
 
         camera.getTransforms().addAll(
             cameraRotateY,
@@ -79,8 +79,8 @@ public class CargoViewer extends Application
 
         Scene scene = new Scene(
             new Group(world),
-            1200,
-            800,
+            120,
+            80,
             true
         );
 
@@ -133,10 +133,10 @@ public class CargoViewer extends Application
 
         for (PlacedPrism placed : placedPrisms)
         {
-            Prism prism = placed.prism();
+            Item item = placed.item();
             Position position = placed.position();
 
-            Dimensions dimensions = prism.get_dimensions();
+            Dimensions dimensions = item.get_dimensions();
 
             Box box = new Box(
                 dimensions.width(),
@@ -153,10 +153,10 @@ public class CargoViewer extends Application
                     position.x()
                         + dimensions.width() / 2.0,
 
-                    position.y()
-                        + dimensions.height() / 2.0,
+                    -position.y()
+                        - dimensions.height() / 2.0,
 
-                    position.z()
+                    +position.z()
                         + dimensions.length() / 2.0
                 )
             );
@@ -183,7 +183,7 @@ public class CargoViewer extends Application
     }
 
     public record PlacedPrism(
-        Prism prism,
+        Item item,
         Position position)
     {
     }

@@ -1,16 +1,14 @@
 package bomboclot.input;
 
+import bomboclot.algorithm.model.Rectangle;
+
 public record Dimensions(double length, double width, double height)
 {
-    public double get_volume()
+    public Rectangle get_base()
     {
-        return length * width * height;
+        return new Rectangle(width, length);
     }
 
-    public double get_base_area()
-    {
-        return length * width;
-    }
     @Override
     public String toString()
     {

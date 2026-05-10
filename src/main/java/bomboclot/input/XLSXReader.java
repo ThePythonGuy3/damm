@@ -7,16 +7,19 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 
 public class XLSXReader implements IReader
 {
-    private static final String PRODUCT_FILE_LOCATION  = "/products.xlsx";
-    private static final String GENERAL_FILE_LOCATION  = "/general.xlsx";
+    private static final String PRODUCT_FILE_LOCATION = "/products.xlsx";
+    private static final String GENERAL_FILE_LOCATION = "/general.xlsx";
 
     private final HashMap<String, Product>  products  = new HashMap<>();
     private final HashMap<String, Costumer> costumers = new HashMap<>();
+
+    private final ArrayList<Order> orders = new ArrayList<>();
 
     private static double convert(double size, String multiplier)
     {
@@ -62,8 +65,8 @@ public class XLSXReader implements IReader
             {
                 Row row = sheet.getRow(i);
 
-                String name   = row.getCell(material_column).getStringCellValue();
-                String unit   = row.getCell(unit_column).getStringCellValue();
+                String name   = row.getCell(material_column).getStringCellValue().strip();
+                String unit   = row.getCell(unit_column).getStringCellValue().toLowerCase().strip();
                 double count  = row.getCell(count_column).getNumericCellValue();
                 double denom  = row.getCell(denom_column).getNumericCellValue();
                 double length = row.getCell(length_column).getNumericCellValue();
@@ -141,10 +144,54 @@ public class XLSXReader implements IReader
         }
     }
 
+    public void load_orders()
+    {
+        try (InputStream general_file_stream = getClass().getResourceAsStream(GENERAL_FILE_LOCATION))
+        {
+            assert general_file_stream != null;
+
+            Workbook workbook = new XSSFWorkbook(general_file_stream);
+
+            Sheet sheet = workbook.getSheet("Detalle entrega");
+
+            int material_column = -1, amount_column = -1, unit_column = -1;
+            int i = 0;
+            for (Cell cell : sheet.getRow(0))
+            {
+                String name = cell.getStringCellValue().toLowerCase().strip();
+
+                switch (name)
+                {
+                    case "material"         -> material_column = i;
+                    case "cantidad entrega" -> amount_column   = i;
+                    case "un.medida venta"  -> unit_column     = i;
+                }
+
+                i++;
+            }
+
+            for (i = 1; i < sheet.getPhysicalNumberOfRows(); i++)
+            {
+                Row row = sheet.getRow(i);
+
+                String identifier = row.getCell(material_column).getStringCellValue().strip();
+                int amount        = (int) row.getCell(amount_column).getNumericCellValue();
+                String unit       = row.getCell(unit_column).getStringCellValue().toLowerCase().strip();
+
+                orders.add(new Order(identifier, amount, unit));
+            }
+        }
+        catch (IOException e)
+        {
+            System.err.println(e.getMessage());
+        }
+    }
+
     public void load()
     {
         load_costumers();
         load_products();
+        load_orders();
     }
 
     @Override
@@ -157,5 +204,11 @@ public class XLSXReader implements IReader
     public Costumer get_costumer(int identifier)
     {
         return costumers.get(identifier);
+    }
+
+    @Override
+    public Order[] get_orders()
+    {
+        return orders.toArray(new Order[0]);
     }
 }
