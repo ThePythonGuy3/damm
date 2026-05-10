@@ -7,4 +7,6 @@ public interface IReader
     Product get_product(String name);
 
     Costumer get_costumer(int identifier);
+
+    Order[] get_orders();
 }
