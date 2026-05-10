@@ -1,8 +1,7 @@
 package bomboclot.algorithm.packer;
 
 import bomboclot.algorithm.model.Item;
-import bomboclot.algorithm.model.Rectangle;
-import bomboclot.input.Dimensions;
+import bomboclot.algorithm.model.Dimensions;
 import javafx.util.Pair;
 
 import java.util.ArrayList;
@@ -20,9 +19,9 @@ public class Categorizer
                Math.abs(a_dim.length() - b_dim.length()) <= 0.01;
     }
 
-    public static Category[] categorize(ArrayList<Item> items)
+    public static ArrayList<Group> categorize(ArrayList<Item> items)
     {
-        ArrayList<Category> output = new ArrayList<>();
+        ArrayList<Group> output = new ArrayList<>();
         ArrayList<Pair<Item, ArrayList<Item>>> categories = new ArrayList<>();
 
         for (Item item : items)
@@ -46,26 +45,26 @@ public class Categorizer
 
         for (var category : categories)
         {
-            output.add(new Category(category.getKey().get_dimensions().get_base(), category.getValue()));
+            output.add(new Group(category.getKey().get_dimensions().get_base(), category.getValue()));
         }
 
-        return output.toArray(new Category[0]);
+        return output;
     }
 
-    public static class Category
+    public static class Group
     {
-        private final Rectangle base_;
+        private final Rect base_;
         private final List<Item> items_;
 
         private Dimensions bounding_box_cache = null;
 
-        public Category(Rectangle base, List<Item> items)
+        public Group(Rect base, List<Item> items)
         {
             this.base_ = base;
             this.items_ = new ArrayList<>(items);
         }
 
-        public Rectangle base()
+        public Rect base()
         {
             return base_;
         }
@@ -79,7 +78,7 @@ public class Categorizer
         {
             if (bounding_box_cache == null)
             {
-                double max_l = 0, max_w = 0, max_h = 0;
+                int max_l = 0, max_w = 0, max_h = 0;
                 for (Item item : items_)
                 {
                     Dimensions item_dim = item.get_dimensions();
@@ -104,7 +103,7 @@ public class Categorizer
         {
             if (bounding_box().height() < 0.01) return 1;
 
-            return Math.min((int) Math.floor(max_height / bounding_box().height()), (int) Math.floor((bounding_box().get_base().area() * 100) / bounding_box().height()));
+            return Math.min((int) Math.floor(max_height / bounding_box().height()), (bounding_box().get_base().area() * 100) / bounding_box().height());
         }
 
         public int stack_amount(double max_height)

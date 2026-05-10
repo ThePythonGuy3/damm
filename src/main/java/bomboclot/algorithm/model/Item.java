@@ -1,7 +1,5 @@
 package bomboclot.algorithm.model;
 
-import bomboclot.input.Dimensions;
-
 public class Item
 {
     private final String product_id;

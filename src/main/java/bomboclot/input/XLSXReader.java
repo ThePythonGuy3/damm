@@ -1,5 +1,6 @@
 package bomboclot.input;
 
+import bomboclot.algorithm.model.Dimensions;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -9,7 +10,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Locale;
 
 public class XLSXReader implements IReader
 {
@@ -21,13 +21,13 @@ public class XLSXReader implements IReader
 
     private final ArrayList<Order> orders = new ArrayList<>();
 
-    private static double convert(double size, String multiplier)
+    private static int convert(double size, String multiplier)
     {
         switch (multiplier)
         {
-            case "cm" -> { return size / 100.0;  }
-            case "mm" -> { return size / 1000.0; }
-            default   -> { return size;          }
+            case "cm" -> { return (int) size * 10;   }
+            case "mm" -> { return (int) size;        }
+            default   -> { return (int) size * 1000; }
         }
     }
 

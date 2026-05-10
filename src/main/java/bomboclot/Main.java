@@ -1,11 +1,11 @@
 package bomboclot;
 
+import bomboclot.algorithm.model.Dimensions;
 import bomboclot.algorithm.model.Item;
 import bomboclot.algorithm.model.Position;
-import bomboclot.algorithm.model.Rectangle;
 import bomboclot.algorithm.packer.Categorizer;
-import bomboclot.algorithm.packer.MaxRects;
-import bomboclot.algorithm.packer.MaxRects2;
+import bomboclot.algorithm.packer.Packer3D;
+import bomboclot.algorithm.packer.PlacedItem;
 import bomboclot.input.*;
 import bomboclot.view.CargoViewer;
 
@@ -15,12 +15,6 @@ public class Main
 {
     private static IReader reader;
 
-    public static boolean is_similar(Rectangle a, Rectangle b)
-    {
-        return Math.abs(a.w() - b.w()) <= 0.05 &&
-                Math.abs(a.h() - b.h()) <= 0.05;
-    }
-
     public static void main(String[] args)
     {
         reader = new XLSXReader();
@@ -29,7 +23,7 @@ public class Main
 
         ArrayList<Item> items = new ArrayList();
 
-        for (int i = 0; i < 30; i++)
+        for (int i = 0; i < 300; i++)
         {
             Order order = reader.get_orders()[i];
 
@@ -52,37 +46,28 @@ public class Main
             }
         }
 
-        Categorizer.Category[] categories = Categorizer.categorize(items);
+        ArrayList<Categorizer.Group> categories = Categorizer.categorize(items);
 
-        var pack_result = MaxRects.pack(Arrays.asList(categories), 1.6, 0.9, 1.295);
-
-        var placedCategories = pack_result.getKey();
-        var unplacedCategories = pack_result.getValue();
-        System.out.println(unplacedCategories);
-        ArrayList<CargoViewer.PlacedPrism> placedItems = new ArrayList<>();
-
-        for (MaxRects.PlacedCategory category : placedCategories)
+        int size = categories.size();
+        for (int i = 0; i < size; i++)
         {
-            Dimensions dimensions;
-            if (category.flipped())
-            {
-                Dimensions current_dimensions = category.category().bounding_box();
-                dimensions = new Dimensions(current_dimensions.width(), current_dimensions.length(), current_dimensions.height());
-            }
-            else
-                dimensions = category.category().bounding_box();
-
-            if (dimensions.height() <= 0.01) continue;
-
-            for (int i = 0; i < category.category().items().size(); i++)
-            {
-                placedItems.add(new CargoViewer.PlacedPrism(new Item("a", dimensions), new Position(category.x(), category.z() + i * dimensions.height(), category.y())));
-            }
+            categories.add(categories.get(i));
         }
 
-        placedItems.add(new CargoViewer.PlacedPrism(new Item("a", new Dimensions(0.9, 1.6, 0.1)), new Position(0, -0.1, 0)));
+        var pack_result = Packer3D.ultra_pack(categories, new Dimensions(1600, 900, 1295));
 
-        CargoViewer.set(placedItems);
+        var placed_items   = pack_result.placed_items();
+        var unplaced_items = pack_result.unplaced_items();
+        ArrayList<CargoViewer.PlacedPrism> placed_prisms = new ArrayList<>();
+
+        for (PlacedItem placed_item : placed_items)
+        {
+            placed_prisms.add(new CargoViewer.PlacedPrism(placed_item.item(), placed_item.position()));
+        }
+
+        placed_prisms.add(new CargoViewer.PlacedPrism(new Item("a", new Dimensions(1600, 900, 100)), new Position(0, -100, 0)));
+
+        CargoViewer.set(placed_prisms);
 
         CargoViewer.main(args);
     }

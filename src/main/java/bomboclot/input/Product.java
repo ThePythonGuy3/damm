@@ -1,5 +1,7 @@
 package bomboclot.input;
 
+import bomboclot.algorithm.model.Dimensions;
+
 import java.util.HashMap;
 
 public class Product

@@ -1,8 +1,10 @@
 package bomboclot.algorithm.model;
 
-public record Position(
-        double x,
-        double y,
-        double z)
+public record Position(int x, int y, int z)
 {
+    @Override
+    public String toString()
+    {
+        return "<x:" + x + ",y: " + y + ",z: " + z + ">mm";
+    }
 }

@@ -2,7 +2,7 @@ package bomboclot.view;
 
 import bomboclot.algorithm.model.Position;
 import bomboclot.algorithm.model.Item;
-import bomboclot.input.Dimensions;
+import bomboclot.algorithm.model.Dimensions;
 import javafx.application.Application;
 import javafx.scene.*;
 import javafx.scene.input.MouseEvent;
@@ -139,9 +139,9 @@ public class CargoViewer extends Application
             Dimensions dimensions = item.get_dimensions();
 
             Box box = new Box(
-                dimensions.width(),
-                dimensions.height(),
-                dimensions.length()
+                dimensions.width() / 1000.0,
+                dimensions.height() / 1000.0,
+                dimensions.length() / 1000.0
             );
 
             // JavaFX Box is centered around origin,
@@ -150,14 +150,14 @@ public class CargoViewer extends Application
 
             box.getTransforms().add(
                 new Translate(
-                    position.x()
-                        + dimensions.width() / 2.0,
+                    (position.x()
+                        + dimensions.width() / 2.0) / 1000.0,
 
-                    -position.y()
-                        - dimensions.height() / 2.0,
+                    (-position.y()
+                        - dimensions.height() / 2.0) / 1000.0,
 
-                    +position.z()
-                        + dimensions.length() / 2.0
+                    (+position.z()
+                        + dimensions.length() / 2.0) / 1000.0
                 )
             );
 
